@@ -437,8 +437,25 @@ Aspect_Ratio: {s1_ratio}
             # JSON 제외한 텍스트
             clean_text = JSON_BLOCK_RE.sub("", output).strip()
             
-            st.markdown("**POSITIVE PROMPT**")
-            st.code(clean_text[:500] + "..." if len(clean_text) > 500 else clean_text, language=None)
+            # SET 패턴으로 분리 (SET 01, SET 02, ... SET 10)
+            set_pattern = re.compile(r'(SET\s*\d+[^\n]*)', re.IGNORECASE)
+            sets = re.split(r'(?=SET\s*\d+)', clean_text, flags=re.IGNORECASE)
+            sets = [s.strip() for s in sets if s.strip() and re.search(r'SET\s*\d+', s, re.IGNORECASE)]
+            
+            if sets:
+                st.markdown(f"**📸 생성된 프롬프트 세트 ({len(sets)}개)**")
+                for i, set_content in enumerate(sets):
+                    # SET 번호 추출
+                    match = re.search(r'SET\s*(\d+)', set_content, re.IGNORECASE)
+                    set_num = match.group(1) if match else str(i+1)
+                    
+                    with st.expander(f"SET {set_num}", expanded=(i==0)):
+                        st.code(set_content, language=None)
+                        st.button(f"📋 Copy SET {set_num}", key=f"copy_s1_set_{i}")
+            else:
+                # SET 구분 없으면 전체 출력
+                st.markdown("**PROMPT OUTPUT**")
+                st.text_area("Full Output", clean_text, height=400, key="s1_full_output")
             
             if json_data:
                 with st.expander("📦 JSON Output (Step 2로 전달)", expanded=False):
@@ -527,8 +544,22 @@ with tab2:
             
             clean_text = JSON_BLOCK_RE.sub("", output).strip()
             
-            st.markdown("**INTERIOR PROMPT**")
-            st.code(clean_text[:500] + "..." if len(clean_text) > 500 else clean_text, language=None)
+            # 외관/인테리어 섹션 분리
+            sections = re.split(r'(?=#{1,3}\s*(?:외관|EXTERIOR|인테리어|INTERIOR|ROOM|Kitchen|Living|Bedroom|Laundry))', clean_text, flags=re.IGNORECASE)
+            sections = [s.strip() for s in sections if s.strip()]
+            
+            if len(sections) > 1:
+                st.markdown(f"**🏠 생성된 프롬프트 ({len(sections)}개 섹션)**")
+                for i, section in enumerate(sections):
+                    # 섹션 제목 추출
+                    title_match = re.search(r'^(#{1,3}\s*)?(.+?)(?:\n|$)', section)
+                    title = title_match.group(2)[:30] if title_match else f"Section {i+1}"
+                    
+                    with st.expander(title.strip(), expanded=(i==0)):
+                        st.code(section, language=None)
+            else:
+                st.markdown("**INTERIOR PROMPT**")
+                st.text_area("Full Output", clean_text, height=400, key="s2_full_output")
             
             if json_data:
                 with st.expander("📦 JSON Output (Step 3로 전달)", expanded=False):
@@ -665,8 +696,42 @@ with tab3:
             output = st.session_state["step3_output"]
             json_data = st.session_state.get("step3_json")
             
-            st.markdown("**5-SET COMPOSITE PROMPTS**")
-            st.text_area("Output", output, height=400, key="s3_output_display")
+            clean_text = JSON_BLOCK_RE.sub("", output).strip()
+            
+            # SET 01 ~ SET 05 분리
+            sets = re.split(r'(?=SET\s*\d+)', clean_text, flags=re.IGNORECASE)
+            sets = [s.strip() for s in sets if s.strip() and re.search(r'SET\s*\d+', s, re.IGNORECASE)]
+            
+            if sets:
+                st.markdown(f"**📦 5-SET COMPOSITE PROMPTS ({len(sets)}개)**")
+                
+                # SET 타입 라벨
+                set_labels = {
+                    "01": "LIFESTYLE 1-A (Interaction)",
+                    "02": "HERO 2-A (Context)",
+                    "03": "LIFESTYLE 1-B (Adjacent)",
+                    "04": "HERO 2-B (Detail)",
+                    "05": "HERO 2-C (Alt Angle)",
+                }
+                
+                for i, set_content in enumerate(sets):
+                    match = re.search(r'SET\s*(\d+)', set_content, re.IGNORECASE)
+                    set_num = match.group(1).zfill(2) if match else str(i+1).zfill(2)
+                    label = set_labels.get(set_num, f"SET {set_num}")
+                    
+                    with st.expander(f"SET {set_num} - {label}", expanded=(i==0)):
+                        # NANO BANANA / MIDJOURNEY 분리
+                        if "NANO BANANA" in set_content.upper() or "MIDJOURNEY" in set_content.upper():
+                            parts = re.split(r'(?=\[PROMPT\s*-)', set_content, flags=re.IGNORECASE)
+                            for part in parts:
+                                if part.strip():
+                                    st.code(part.strip(), language=None)
+                                    st.markdown("---")
+                        else:
+                            st.code(set_content, language=None)
+            else:
+                st.markdown("**COMPOSITE PROMPTS**")
+                st.text_area("Full Output", clean_text, height=400, key="s3_full_output")
             
             if json_data:
                 with st.expander("📦 JSON Output", expanded=False):
