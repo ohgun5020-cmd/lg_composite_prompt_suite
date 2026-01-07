@@ -1,0 +1,331 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.local/lg2026/schemas/LG_Step3_Input_Schema_v1.1.json",
+  "title": "LG Step3 Input Schema v1.1",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "project_id",
+    "step1_data",
+    "step2_data",
+    "room_target",
+    "logo_evidence",
+    "room_fit_status"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "pattern": "^\\d+(\\.\\d+)?$"
+    },
+    "project_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "step1_data": {
+      "type": "object",
+      "required": [
+        "region",
+        "city",
+        "season",
+        "model_age",
+        "occupation",
+        "fashion_color",
+        "biometric_ids"
+      ],
+      "properties": {
+        "region": {
+          "type": "string",
+          "minLength": 2
+        },
+        "city": {
+          "type": "string",
+          "minLength": 2
+        },
+        "season": {
+          "type": "string",
+          "minLength": 2
+        },
+        "model_age": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "occupation": {
+          "type": "string",
+          "minLength": 2
+        },
+        "fashion_color": {
+          "type": "string",
+          "pattern": "^#[0-9A-Fa-f]{6}$"
+        },
+        "biometric_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 2
+          },
+          "minItems": 1
+        }
+      },
+      "additionalProperties": true
+    },
+    "step2_data": {
+      "type": "object",
+      "required": [
+        "housing_type",
+        "interior_style",
+        "room_types",
+        "light_kelvin",
+        "light_direction",
+        "camera_meta",
+        "dominant_palette",
+        "secondary_color",
+        "negative_space_zones",
+        "anchor_objects"
+      ],
+      "properties": {
+        "housing_type": {
+          "type": "string",
+          "minLength": 2
+        },
+        "interior_style": {
+          "type": "string",
+          "minLength": 2
+        },
+        "room_types": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 2
+          },
+          "minItems": 1
+        },
+        "light_kelvin": {
+          "type": "integer",
+          "minimum": 1000
+        },
+        "light_direction": {
+          "type": "string",
+          "minLength": 2
+        },
+        "camera_meta": {
+          "type": "object",
+          "required": ["default"],
+          "properties": {
+            "default": {
+              "type": "object",
+              "required": [
+                "eye_level_cm",
+                "lens_mm_range",
+                "vanishing_lines"
+              ],
+              "properties": {
+                "eye_level_cm": {
+                  "type": "integer",
+                  "minimum": 20
+                },
+                "lens_mm_range": {
+                  "type": "string",
+                  "minLength": 2
+                },
+                "vanishing_lines": {
+                  "type": "string",
+                  "minLength": 2
+                }
+              },
+              "additionalProperties": true
+            },
+            "overrides": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object",
+                "required": [
+                  "eye_level_cm",
+                  "lens_mm_range",
+                  "vanishing_lines"
+                ],
+                "properties": {
+                  "eye_level_cm": {
+                    "type": "integer",
+                    "minimum": 20
+                  },
+                  "lens_mm_range": {
+                    "type": "string",
+                    "minLength": 2
+                  },
+                  "vanishing_lines": {
+                    "type": "string",
+                    "minLength": 2
+                  }
+                },
+                "additionalProperties": true
+              }
+            }
+          },
+          "additionalProperties": true
+        },
+        "dominant_palette": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 2
+          },
+          "minItems": 1
+        },
+        "secondary_color": {
+          "type": "string",
+          "pattern": "^#[0-9A-Fa-f]{6}$"
+        },
+        "negative_space_zones": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 2
+          }
+        },
+        "anchor_objects": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 2
+          },
+          "minItems": 1
+        }
+      },
+      "additionalProperties": true
+    },
+    "product": {
+      "type": "object",
+      "required": [
+        "model_name",
+        "category",
+        "dimensions_mm",
+        "door_config",
+        "handle",
+        "official_color_name",
+        "product_line"
+      ],
+      "properties": {
+        "model_name": {
+          "type": "string",
+          "minLength": 2
+        },
+        "category": {
+          "type": "string",
+          "minLength": 2
+        },
+        "url": {
+          "type": "string",
+          "minLength": 8
+        },
+        "dimensions_mm": {
+          "type": "object",
+          "required": ["width", "height", "depth"],
+          "properties": {
+            "width": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "height": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "depth": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "additionalProperties": false
+        },
+        "door_config": {
+          "type": "string",
+          "minLength": 2
+        },
+        "handle": {
+          "type": "string",
+          "minLength": 2
+        },
+        "official_color_name": {
+          "type": "string",
+          "minLength": 2
+        },
+        "product_line": {
+          "type": "string",
+          "minLength": 2
+        }
+      },
+      "additionalProperties": true
+    },
+    "products": {
+      "type": "array",
+      "items": {
+        "$ref": "#/properties/product"
+      },
+      "minItems": 2
+    },
+    "ecosystem_mode": {
+      "type": "boolean"
+    },
+    "three_pass": {
+      "type": "object",
+      "required": ["enabled"],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "seed": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": true
+    },
+    "room_target": {
+      "type": "object",
+      "required": [
+        "room_type",
+        "grid_zone"
+      ],
+      "properties": {
+        "room_type": {
+          "type": "string",
+          "minLength": 2
+        },
+        "grid_zone": {
+          "type": "string",
+          "minLength": 2
+        }
+      },
+      "additionalProperties": true
+    },
+    "logo_evidence": {
+      "type": "string",
+      "enum": ["PHOTO", "URL", "BOTH", "NONE"]
+    },
+    "room_fit_status": {
+      "type": "string",
+      "enum": ["OK", "ASK", "NO"]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "ecosystem_mode": {
+            "const": true
+          }
+        },
+        "required": ["ecosystem_mode"]
+      },
+      "then": {
+        "required": ["products"]
+      }
+    },
+    {
+      "oneOf": [
+        { "required": ["product"] },
+        { "required": ["products"] }
+      ]
+    }
+  ],
+  "additionalProperties": true
+}
