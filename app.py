@@ -351,6 +351,22 @@ if "step2_output" not in st.session_state:
 if "step3_output" not in st.session_state:
     st.session_state["step3_output"] = None
 
+# 채팅 히스토리
+if "step1_messages" not in st.session_state:
+    st.session_state["step1_messages"] = []
+if "step2_messages" not in st.session_state:
+    st.session_state["step2_messages"] = []
+if "step3_messages" not in st.session_state:
+    st.session_state["step3_messages"] = []
+
+# 채팅 세션
+if "step1_chat" not in st.session_state:
+    st.session_state["step1_chat"] = None
+if "step2_chat" not in st.session_state:
+    st.session_state["step2_chat"] = None
+if "step3_chat" not in st.session_state:
+    st.session_state["step3_chat"] = None
+
 # ═══════════════════════════════════════════════════════════════
 # TABS
 # ═══════════════════════════════════════════════════════════════
@@ -360,7 +376,7 @@ tab1, tab2, tab3 = st.tabs(["🎭 Step 1: Character", "🏠 Step 2: Interior", "
 # STEP 1: CHARACTER
 # ═══════════════════════════════════════════════════════════════
 with tab1:
-    col_input1, col_output1 = st.columns([1, 1])
+    col_input1, col_output1 = st.columns([1, 1.2])
     
     with col_input1:
         st.markdown("### ① Model Character Setup")
@@ -388,9 +404,6 @@ with tab1:
             s1_diversity = st.selectbox("DIVERSITY", DIVERSITY_MODE_OPTIONS, format_func=lambda x: DIVERSITY_MODE_LABELS[x], key="s1_diversity")
         
         s1_ratio = st.selectbox("ASPECT RATIO", ASPECT_RATIO_OPTIONS, index=2, key="s1_ratio")
-        
-        s1_direction = st.text_area("CREATIVE DIRECTION", placeholder="예: 카멜 코트, 모던한 분위기, 미술관 프리오프닝", height=80, key="s1_direction")
-        
         s1_model = st.selectbox("MODEL", model_options, key="s1_model")
         
         if st.button("🎨 Generate Step 1", type="primary", key="s1_generate"):
@@ -405,69 +418,88 @@ Cast_Mode: {s1_cast_mode}
 Diversity_Mode: {s1_diversity}
 Aspect_Ratio: {s1_ratio}
 
-[USER_CREATIVE_DIRECTION]
-{s1_direction if s1_direction else "프로페셔널한 룩북 스타일"}
-
 프롬프트를 생성해주세요.
 """
+            st.session_state["step1_messages"].append({"role": "user", "content": f"설정: {s1_gender}, {s1_age}, {s1_ethnicity}, {s1_city}"})
+            
             with st.spinner("Generating... (최대 60초 소요)"):
                 try:
-                    result = generate_with_retry(api_key, s1_model, STEP1_SYSTEM_PROMPT, prompt)
+                    # 새 채팅 세션 시작
+                    st.session_state["step1_chat"] = get_chat_session(api_key, s1_model, STEP1_SYSTEM_PROMPT)
+                    response = st.session_state["step1_chat"].send_message(prompt)
+                    result = response.text
+                    
                     if result:
                         st.session_state["step1_output"] = result
                         st.session_state["step1_json"] = parse_json_from_response(result)
-                        st.success("✅ 생성 완료!")
+                        st.session_state["step1_messages"].append({"role": "assistant", "content": result})
                         st.rerun()
-                    else:
-                        st.error("응답이 비어있습니다. 다시 시도해주세요.")
                 except Exception as e:
                     st.error(f"Error: {e}")
     
     with col_output1:
-        st.markdown("### Generated Output")
+        st.markdown("### Generated Output & Chat")
         if st.session_state.get("step1_json"):
             st.markdown('<span class="status-badge status-validated">Schema Validated</span>', unsafe_allow_html=True)
-        else:
-            st.markdown('<span class="status-badge status-pending">Pending</span>', unsafe_allow_html=True)
         
-        if st.session_state.get("step1_output"):
-            output = st.session_state["step1_output"]
-            json_data = st.session_state.get("step1_json")
+        # 채팅 메시지 표시
+        chat_container = st.container(height=450)
+        with chat_container:
+            for msg in st.session_state["step1_messages"]:
+                if msg["role"] == "user":
+                    st.chat_message("user").write(msg["content"])
+                else:
+                    with st.chat_message("assistant"):
+                        content = msg["content"]
+                        json_data = parse_json_from_response(content)
+                        clean_text = JSON_BLOCK_RE.sub("", content).strip()
+                        
+                        # SET 패턴으로 분리
+                        sets = re.split(r'(?=SET\s*\d+)', clean_text, flags=re.IGNORECASE)
+                        sets = [s.strip() for s in sets if s.strip() and re.search(r'SET\s*\d+', s, re.IGNORECASE)]
+                        
+                        if sets:
+                            st.markdown(f"**📸 {len(sets)}개 세트 생성됨**")
+                            for i, set_content in enumerate(sets[:3]):  # 처음 3개만 미리보기
+                                with st.expander(f"SET {i+1}", expanded=(i==0)):
+                                    st.code(set_content[:500] + "..." if len(set_content) > 500 else set_content, language=None)
+                            if len(sets) > 3:
+                                st.caption(f"외 {len(sets)-3}개 세트...")
+                        else:
+                            st.markdown(clean_text[:800] + "..." if len(clean_text) > 800 else clean_text)
+                        
+                        if json_data:
+                            with st.expander("📦 JSON (Step 2로 전달)"):
+                                st.json(json_data)
+        
+        # 채팅 입력
+        if s1_chat_input := st.chat_input("추가 지시 또는 수정 요청...", key="s1_chat_input"):
+            if st.session_state.get("step1_chat") is None:
+                st.session_state["step1_chat"] = get_chat_session(api_key, s1_model, STEP1_SYSTEM_PROMPT)
             
-            # JSON 제외한 텍스트
-            clean_text = JSON_BLOCK_RE.sub("", output).strip()
+            st.session_state["step1_messages"].append({"role": "user", "content": s1_chat_input})
             
-            # SET 패턴으로 분리 (SET 01, SET 02, ... SET 10)
-            set_pattern = re.compile(r'(SET\s*\d+[^\n]*)', re.IGNORECASE)
-            sets = re.split(r'(?=SET\s*\d+)', clean_text, flags=re.IGNORECASE)
-            sets = [s.strip() for s in sets if s.strip() and re.search(r'SET\s*\d+', s, re.IGNORECASE)]
-            
-            if sets:
-                st.markdown(f"**📸 생성된 프롬프트 세트 ({len(sets)}개)**")
-                for i, set_content in enumerate(sets):
-                    # SET 번호 추출
-                    match = re.search(r'SET\s*(\d+)', set_content, re.IGNORECASE)
-                    set_num = match.group(1) if match else str(i+1)
+            with st.spinner("응답 중..."):
+                try:
+                    response = st.session_state["step1_chat"].send_message(s1_chat_input)
+                    result = response.text
+                    st.session_state["step1_messages"].append({"role": "assistant", "content": result})
                     
-                    with st.expander(f"SET {set_num}", expanded=(i==0)):
-                        st.code(set_content, language=None)
-                        st.button(f"📋 Copy SET {set_num}", key=f"copy_s1_set_{i}")
-            else:
-                # SET 구분 없으면 전체 출력
-                st.markdown("**PROMPT OUTPUT**")
-                st.text_area("Full Output", clean_text, height=400, key="s1_full_output")
-            
-            if json_data:
-                with st.expander("📦 JSON Output (Step 2로 전달)", expanded=False):
-                    st.json(json_data)
-        else:
-            st.info("왼쪽에서 설정 후 Generate 버튼을 클릭하세요.")
+                    # JSON 있으면 업데이트
+                    new_json = parse_json_from_response(result)
+                    if new_json:
+                        st.session_state["step1_json"] = new_json
+                        st.session_state["step1_output"] = result
+                    
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Error: {e}")
 
 # ═══════════════════════════════════════════════════════════════
 # STEP 2: INTERIOR
 # ═══════════════════════════════════════════════════════════════
 with tab2:
-    col_input2, col_output2 = st.columns([1, 1])
+    col_input2, col_output2 = st.columns([1, 1.2])
     
     with col_input2:
         st.markdown("### ② Interior Setup")
@@ -477,7 +509,7 @@ with tab2:
             st.success("✅ Step 1 데이터 자동 로드됨")
             s1_json = st.session_state["step1_json"]
         else:
-            st.warning("⚠️ Step 1을 먼저 완료하거나, JSON을 직접 입력하세요.")
+            st.warning("⚠️ Step 1을 먼저 완료하세요")
             s1_json = None
         
         col_housing, col_style = st.columns(2)
@@ -492,9 +524,6 @@ with tab2:
         st.caption(f"오브젝트 밀도: {ENTROPY_LEVELS.get(s2_entropy, '')}")
         
         s2_preset = st.selectbox("OUTPUT PRESET", OUTPUT_PRESET_OPTIONS, key="s2_preset")
-        
-        s2_direction = st.text_area("CREATIVE DIRECTION", placeholder="예: 따뜻한 조명, 갤러리 느낌의 거실", height=80, key="s2_direction")
-        
         s2_model = st.selectbox("MODEL", model_options, key="s2_model")
         
         if st.button("🏠 Generate Step 2", type="primary", key="s2_generate"):
@@ -513,65 +542,74 @@ with tab2:
                 prompt_lines.append(json.dumps(s1_json, indent=2, ensure_ascii=False))
                 prompt_lines.append("```")
             prompt_lines.append("")
-            prompt_lines.append("[USER_CREATIVE_DIRECTION]")
-            prompt_lines.append(s2_direction if s2_direction else "모던하고 세련된 인테리어")
-            prompt_lines.append("")
             prompt_lines.append("인테리어 프롬프트를 생성해주세요.")
+            
+            st.session_state["step2_messages"].append({"role": "user", "content": f"설정: {s2_housing}, {s2_style}, {', '.join(s2_rooms)}"})
             
             with st.spinner("Generating... (최대 60초 소요)"):
                 try:
-                    result = generate_with_retry(api_key, s2_model, STEP2_SYSTEM_PROMPT, "\n".join(prompt_lines))
+                    st.session_state["step2_chat"] = get_chat_session(api_key, s2_model, STEP2_SYSTEM_PROMPT)
+                    response = st.session_state["step2_chat"].send_message("\n".join(prompt_lines))
+                    result = response.text
+                    
                     if result:
                         st.session_state["step2_output"] = result
                         st.session_state["step2_json"] = parse_json_from_response(result)
-                        st.success("✅ 생성 완료!")
+                        st.session_state["step2_messages"].append({"role": "assistant", "content": result})
                         st.rerun()
-                    else:
-                        st.error("응답이 비어있습니다. 다시 시도해주세요.")
                 except Exception as e:
                     st.error(f"Error: {e}")
     
     with col_output2:
-        st.markdown("### Generated Output")
+        st.markdown("### Generated Output & Chat")
         if st.session_state.get("step2_json"):
             st.markdown('<span class="status-badge status-validated">Schema Validated</span>', unsafe_allow_html=True)
-        else:
-            st.markdown('<span class="status-badge status-pending">Pending</span>', unsafe_allow_html=True)
         
-        if st.session_state.get("step2_output"):
-            output = st.session_state["step2_output"]
-            json_data = st.session_state.get("step2_json")
+        # 채팅 메시지 표시
+        chat_container = st.container(height=450)
+        with chat_container:
+            for msg in st.session_state["step2_messages"]:
+                if msg["role"] == "user":
+                    st.chat_message("user").write(msg["content"])
+                else:
+                    with st.chat_message("assistant"):
+                        content = msg["content"]
+                        json_data = parse_json_from_response(content)
+                        clean_text = JSON_BLOCK_RE.sub("", content).strip()
+                        
+                        st.markdown(clean_text[:1000] + "..." if len(clean_text) > 1000 else clean_text)
+                        
+                        if json_data:
+                            with st.expander("📦 JSON (Step 3로 전달)"):
+                                st.json(json_data)
+        
+        # 채팅 입력
+        if s2_chat_input := st.chat_input("추가 지시 또는 수정 요청...", key="s2_chat_input"):
+            if st.session_state.get("step2_chat") is None:
+                st.session_state["step2_chat"] = get_chat_session(api_key, s2_model, STEP2_SYSTEM_PROMPT)
             
-            clean_text = JSON_BLOCK_RE.sub("", output).strip()
+            st.session_state["step2_messages"].append({"role": "user", "content": s2_chat_input})
             
-            # 외관/인테리어 섹션 분리
-            sections = re.split(r'(?=#{1,3}\s*(?:외관|EXTERIOR|인테리어|INTERIOR|ROOM|Kitchen|Living|Bedroom|Laundry))', clean_text, flags=re.IGNORECASE)
-            sections = [s.strip() for s in sections if s.strip()]
-            
-            if len(sections) > 1:
-                st.markdown(f"**🏠 생성된 프롬프트 ({len(sections)}개 섹션)**")
-                for i, section in enumerate(sections):
-                    # 섹션 제목 추출
-                    title_match = re.search(r'^(#{1,3}\s*)?(.+?)(?:\n|$)', section)
-                    title = title_match.group(2)[:30] if title_match else f"Section {i+1}"
+            with st.spinner("응답 중..."):
+                try:
+                    response = st.session_state["step2_chat"].send_message(s2_chat_input)
+                    result = response.text
+                    st.session_state["step2_messages"].append({"role": "assistant", "content": result})
                     
-                    with st.expander(title.strip(), expanded=(i==0)):
-                        st.code(section, language=None)
-            else:
-                st.markdown("**INTERIOR PROMPT**")
-                st.text_area("Full Output", clean_text, height=400, key="s2_full_output")
-            
-            if json_data:
-                with st.expander("📦 JSON Output (Step 3로 전달)", expanded=False):
-                    st.json(json_data)
-        else:
-            st.info("왼쪽에서 설정 후 Generate 버튼을 클릭하세요.")
+                    new_json = parse_json_from_response(result)
+                    if new_json:
+                        st.session_state["step2_json"] = new_json
+                        st.session_state["step2_output"] = result
+                    
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Error: {e}")
 
 # ═══════════════════════════════════════════════════════════════
 # STEP 3: COMPOSITE
 # ═══════════════════════════════════════════════════════════════
 with tab3:
-    col_input3, col_output3 = st.columns([1, 1])
+    col_input3, col_output3 = st.columns([1, 1.2])
     
     with col_input3:
         st.markdown("### ③ Product Composite Setup")
@@ -581,13 +619,11 @@ with tab3:
         s2_json = st.session_state.get("step2_json")
         
         if s1_json and s2_json:
-            st.success("✅ Step 1 + Step 2 데이터 자동 로드됨")
-        elif s1_json:
-            st.warning("⚠️ Step 2 데이터 없음")
+            st.success("✅ Step 1 + Step 2 데이터 로드됨")
         elif s2_json:
             st.warning("⚠️ Step 1 데이터 없음")
         else:
-            st.warning("⚠️ Step 1, 2를 먼저 완료하세요.")
+            st.warning("⚠️ Step 1, 2를 먼저 완료하세요")
         
         st.markdown("**제품 정보**")
         s3_product_model = st.text_input("MODEL NAME", placeholder="예: LG Styler S5MBC", key="s3_product_model")
@@ -608,14 +644,12 @@ with tab3:
         
         s3_color = st.text_input("COLOR", value="Mist Beige", key="s3_color")
         
-        st.markdown("**Room Target**")
         col_room, col_grid = st.columns(2)
         with col_room:
             s3_room = st.selectbox("ROOM TYPE", ROOM_TYPE_OPTIONS, key="s3_room")
         with col_grid:
             s3_grid = st.selectbox("GRID ZONE", GRID_ZONE_OPTIONS, index=4, key="s3_grid")
         
-        st.markdown("**설정**")
         col_hand, col_logo = st.columns(2)
         with col_hand:
             s3_hand = st.selectbox("HAND POLICY", HAND_POLICY_OPTIONS, index=1, format_func=lambda x: HAND_POLICY_LABELS[x], key="s3_hand")
@@ -626,11 +660,6 @@ with tab3:
             s3_tv_state = st.selectbox("TV STATE", TV_STATE_OPTIONS, key="s3_tv_state")
         else:
             s3_tv_state = "OFF"
-        
-        s3_harmonize = st.checkbox("AUTO-HARMONIZE", value=True, key="s3_harmonize")
-        s3_output_mode = st.selectbox("OUTPUT MODE", OUTPUT_MODE_OPTIONS, key="s3_output_mode")
-        
-        s3_direction = st.text_area("CREATIVE DIRECTION", placeholder="예: 프리미엄 라이프스타일 컷", height=80, key="s3_direction")
         
         s3_model = st.selectbox("MODEL", model_options, key="s3_model")
         
@@ -650,9 +679,7 @@ with tab3:
                 "[STEP3_SETTINGS]",
                 f"Hand_Policy: {s3_hand}",
                 f"TV_State: {s3_tv_state}",
-                f"Auto_Harmonize: {'ON' if s3_harmonize else 'OFF'}",
                 f"Logo_Mode: {s3_logo}",
-                f"Output_Mode: {s3_output_mode}",
             ]
             if s1_json:
                 prompt_lines.append("")
@@ -667,77 +694,85 @@ with tab3:
                 prompt_lines.append(json.dumps(s2_json, indent=2, ensure_ascii=False))
                 prompt_lines.append("```")
             prompt_lines.append("")
-            prompt_lines.append("[USER_CREATIVE_DIRECTION]")
-            prompt_lines.append(s3_direction if s3_direction else "프리미엄 라이프스타일 컷")
-            prompt_lines.append("")
             prompt_lines.append("5-SET 합성 프롬프트를 생성해주세요.")
             
-            with st.spinner("Generating 5-SET Prompts... (최대 90초 소요)"):
+            st.session_state["step3_messages"].append({"role": "user", "content": f"제품: {s3_product_model}, {s3_category}, {s3_color}"})
+            
+            with st.spinner("Generating 5-SET... (최대 90초 소요)"):
                 try:
-                    result = generate_with_retry(api_key, s3_model, STEP3_SYSTEM_PROMPT, "\n".join(prompt_lines))
+                    st.session_state["step3_chat"] = get_chat_session(api_key, s3_model, STEP3_SYSTEM_PROMPT)
+                    response = st.session_state["step3_chat"].send_message("\n".join(prompt_lines))
+                    result = response.text
+                    
                     if result:
                         st.session_state["step3_output"] = result
                         st.session_state["step3_json"] = parse_json_from_response(result)
-                        st.success("✅ 생성 완료!")
+                        st.session_state["step3_messages"].append({"role": "assistant", "content": result})
                         st.rerun()
-                    else:
-                        st.error("응답이 비어있습니다. 다시 시도해주세요.")
                 except Exception as e:
                     st.error(f"Error: {e}")
     
     with col_output3:
-        st.markdown("### Generated Output")
+        st.markdown("### Generated Output & Chat")
         if st.session_state.get("step3_json"):
             st.markdown('<span class="status-badge status-validated">Schema Validated</span>', unsafe_allow_html=True)
-        else:
-            st.markdown('<span class="status-badge status-pending">Pending</span>', unsafe_allow_html=True)
         
-        if st.session_state.get("step3_output"):
-            output = st.session_state["step3_output"]
-            json_data = st.session_state.get("step3_json")
-            
-            clean_text = JSON_BLOCK_RE.sub("", output).strip()
-            
-            # SET 01 ~ SET 05 분리
-            sets = re.split(r'(?=SET\s*\d+)', clean_text, flags=re.IGNORECASE)
-            sets = [s.strip() for s in sets if s.strip() and re.search(r'SET\s*\d+', s, re.IGNORECASE)]
-            
-            if sets:
-                st.markdown(f"**📦 5-SET COMPOSITE PROMPTS ({len(sets)}개)**")
-                
-                # SET 타입 라벨
-                set_labels = {
-                    "01": "LIFESTYLE 1-A (Interaction)",
-                    "02": "HERO 2-A (Context)",
-                    "03": "LIFESTYLE 1-B (Adjacent)",
-                    "04": "HERO 2-B (Detail)",
-                    "05": "HERO 2-C (Alt Angle)",
-                }
-                
-                for i, set_content in enumerate(sets):
-                    match = re.search(r'SET\s*(\d+)', set_content, re.IGNORECASE)
-                    set_num = match.group(1).zfill(2) if match else str(i+1).zfill(2)
-                    label = set_labels.get(set_num, f"SET {set_num}")
-                    
-                    with st.expander(f"SET {set_num} - {label}", expanded=(i==0)):
-                        # NANO BANANA / MIDJOURNEY 분리
-                        if "NANO BANANA" in set_content.upper() or "MIDJOURNEY" in set_content.upper():
-                            parts = re.split(r'(?=\[PROMPT\s*-)', set_content, flags=re.IGNORECASE)
-                            for part in parts:
-                                if part.strip():
-                                    st.code(part.strip(), language=None)
-                                    st.markdown("---")
+        # 채팅 메시지 표시
+        chat_container = st.container(height=450)
+        with chat_container:
+            for msg in st.session_state["step3_messages"]:
+                if msg["role"] == "user":
+                    st.chat_message("user").write(msg["content"])
+                else:
+                    with st.chat_message("assistant"):
+                        content = msg["content"]
+                        json_data = parse_json_from_response(content)
+                        clean_text = JSON_BLOCK_RE.sub("", content).strip()
+                        
+                        # SET 분리
+                        sets = re.split(r'(?=SET\s*\d+)', clean_text, flags=re.IGNORECASE)
+                        sets = [s.strip() for s in sets if s.strip() and re.search(r'SET\s*\d+', s, re.IGNORECASE)]
+                        
+                        if sets:
+                            st.markdown(f"**📦 5-SET ({len(sets)}개)**")
+                            set_labels = {
+                                "01": "LIFESTYLE 1-A", "02": "HERO 2-A", "03": "LIFESTYLE 1-B",
+                                "04": "HERO 2-B", "05": "HERO 2-C",
+                            }
+                            for i, set_content in enumerate(sets):
+                                match = re.search(r'SET\s*(\d+)', set_content, re.IGNORECASE)
+                                set_num = match.group(1).zfill(2) if match else str(i+1).zfill(2)
+                                label = set_labels.get(set_num, f"SET {set_num}")
+                                with st.expander(f"SET {set_num} - {label}", expanded=(i==0)):
+                                    st.code(set_content[:800] + "..." if len(set_content) > 800 else set_content, language=None)
                         else:
-                            st.code(set_content, language=None)
-            else:
-                st.markdown("**COMPOSITE PROMPTS**")
-                st.text_area("Full Output", clean_text, height=400, key="s3_full_output")
+                            st.markdown(clean_text[:1000] + "..." if len(clean_text) > 1000 else clean_text)
+                        
+                        if json_data:
+                            with st.expander("📦 JSON"):
+                                st.json(json_data)
+        
+        # 채팅 입력
+        if s3_chat_input := st.chat_input("추가 지시 또는 수정 요청...", key="s3_chat_input"):
+            if st.session_state.get("step3_chat") is None:
+                st.session_state["step3_chat"] = get_chat_session(api_key, s3_model, STEP3_SYSTEM_PROMPT)
             
-            if json_data:
-                with st.expander("📦 JSON Output", expanded=False):
-                    st.json(json_data)
-        else:
-            st.info("왼쪽에서 설정 후 Generate 버튼을 클릭하세요.")
+            st.session_state["step3_messages"].append({"role": "user", "content": s3_chat_input})
+            
+            with st.spinner("응답 중..."):
+                try:
+                    response = st.session_state["step3_chat"].send_message(s3_chat_input)
+                    result = response.text
+                    st.session_state["step3_messages"].append({"role": "assistant", "content": result})
+                    
+                    new_json = parse_json_from_response(result)
+                    if new_json:
+                        st.session_state["step3_json"] = new_json
+                        st.session_state["step3_output"] = result
+                    
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Error: {e}")
 
 # ═══════════════════════════════════════════════════════════════
 # FOOTER
@@ -746,7 +781,12 @@ st.markdown("---")
 col_reset, col_info = st.columns([1, 3])
 with col_reset:
     if st.button("🗑️ Reset All", type="secondary"):
-        for key in ["step1_output", "step1_json", "step2_output", "step2_json", "step3_output", "step3_json"]:
+        keys_to_clear = [
+            "step1_output", "step1_json", "step1_messages", "step1_chat",
+            "step2_output", "step2_json", "step2_messages", "step2_chat",
+            "step3_output", "step3_json", "step3_messages", "step3_chat",
+        ]
+        for key in keys_to_clear:
             st.session_state.pop(key, None)
         st.rerun()
 with col_info:
