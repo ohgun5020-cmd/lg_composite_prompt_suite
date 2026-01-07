@@ -4,6 +4,7 @@ import json
 import re
 import os
 import hashlib
+import time
 from datetime import datetime
 
 try:
@@ -152,13 +153,46 @@ def load_model_options(api_key):
 
 def get_chat_session(api_key, model_name, system_prompt, history=None):
     genai.configure(api_key=api_key)
-    generation_config = {"temperature": 0.7, "top_p": 0.95, "top_k": 40, "max_output_tokens": 8192}
+    generation_config = {
+        "temperature": 0.7,
+        "top_p": 0.95,
+        "top_k": 40,
+        "max_output_tokens": 16384,  # 증가
+    }
     model = genai.GenerativeModel(
         model_name=model_name,
         generation_config=generation_config,
         system_instruction=system_prompt,
     )
     return model.start_chat(history=history or [])
+
+
+def generate_with_retry(api_key, model_name, system_prompt, prompt, max_retries=2):
+    """재시도 로직 포함 생성 함수"""
+    genai.configure(api_key=api_key)
+    generation_config = {
+        "temperature": 0.7,
+        "top_p": 0.95,
+        "top_k": 40,
+        "max_output_tokens": 16384,
+    }
+    model = genai.GenerativeModel(
+        model_name=model_name,
+        generation_config=generation_config,
+        system_instruction=system_prompt,
+    )
+    
+    for attempt in range(max_retries + 1):
+        try:
+            response = model.generate_content(prompt)
+            if response and response.text:
+                return response.text
+        except Exception as e:
+            if attempt == max_retries:
+                raise e
+            time.sleep(2)  # 재시도 전 대기
+            continue
+    return None
 
 
 def parse_json_from_response(text):
@@ -372,14 +406,20 @@ Diversity_Mode: {s1_diversity}
 Aspect_Ratio: {s1_ratio}
 
 [USER_CREATIVE_DIRECTION]
-{s1_direction}
+{s1_direction if s1_direction else "프로페셔널한 룩북 스타일"}
+
+프롬프트를 생성해주세요.
 """
-            with st.spinner("Generating..."):
+            with st.spinner("Generating... (최대 60초 소요)"):
                 try:
-                    chat = get_chat_session(api_key, s1_model, STEP1_SYSTEM_PROMPT)
-                    response = chat.send_message(prompt)
-                    st.session_state["step1_output"] = response.text
-                    st.session_state["step1_json"] = parse_json_from_response(response.text)
+                    result = generate_with_retry(api_key, s1_model, STEP1_SYSTEM_PROMPT, prompt)
+                    if result:
+                        st.session_state["step1_output"] = result
+                        st.session_state["step1_json"] = parse_json_from_response(result)
+                        st.success("✅ 생성 완료!")
+                        st.rerun()
+                    else:
+                        st.error("응답이 비어있습니다. 다시 시도해주세요.")
                 except Exception as e:
                     st.error(f"Error: {e}")
     
@@ -457,14 +497,20 @@ with tab2:
                 prompt_lines.append("```")
             prompt_lines.append("")
             prompt_lines.append("[USER_CREATIVE_DIRECTION]")
-            prompt_lines.append(s2_direction)
+            prompt_lines.append(s2_direction if s2_direction else "모던하고 세련된 인테리어")
+            prompt_lines.append("")
+            prompt_lines.append("인테리어 프롬프트를 생성해주세요.")
             
-            with st.spinner("Generating..."):
+            with st.spinner("Generating... (최대 60초 소요)"):
                 try:
-                    chat = get_chat_session(api_key, s2_model, STEP2_SYSTEM_PROMPT)
-                    response = chat.send_message("\n".join(prompt_lines))
-                    st.session_state["step2_output"] = response.text
-                    st.session_state["step2_json"] = parse_json_from_response(response.text)
+                    result = generate_with_retry(api_key, s2_model, STEP2_SYSTEM_PROMPT, "\n".join(prompt_lines))
+                    if result:
+                        st.session_state["step2_output"] = result
+                        st.session_state["step2_json"] = parse_json_from_response(result)
+                        st.success("✅ 생성 완료!")
+                        st.rerun()
+                    else:
+                        st.error("응답이 비어있습니다. 다시 시도해주세요.")
                 except Exception as e:
                     st.error(f"Error: {e}")
     
@@ -591,14 +637,20 @@ with tab3:
                 prompt_lines.append("```")
             prompt_lines.append("")
             prompt_lines.append("[USER_CREATIVE_DIRECTION]")
-            prompt_lines.append(s3_direction)
+            prompt_lines.append(s3_direction if s3_direction else "프리미엄 라이프스타일 컷")
+            prompt_lines.append("")
+            prompt_lines.append("5-SET 합성 프롬프트를 생성해주세요.")
             
-            with st.spinner("Generating 5-SET Prompts..."):
+            with st.spinner("Generating 5-SET Prompts... (최대 90초 소요)"):
                 try:
-                    chat = get_chat_session(api_key, s3_model, STEP3_SYSTEM_PROMPT)
-                    response = chat.send_message("\n".join(prompt_lines))
-                    st.session_state["step3_output"] = response.text
-                    st.session_state["step3_json"] = parse_json_from_response(response.text)
+                    result = generate_with_retry(api_key, s3_model, STEP3_SYSTEM_PROMPT, "\n".join(prompt_lines))
+                    if result:
+                        st.session_state["step3_output"] = result
+                        st.session_state["step3_json"] = parse_json_from_response(result)
+                        st.success("✅ 생성 완료!")
+                        st.rerun()
+                    else:
+                        st.error("응답이 비어있습니다. 다시 시도해주세요.")
                 except Exception as e:
                     st.error(f"Error: {e}")
     
